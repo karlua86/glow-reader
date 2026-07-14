@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "RokidRemote"
+rootProject.name = "GlowRemote"
 include ':app'
