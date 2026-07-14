@@ -1,0 +1,15 @@
+# build outputs
+**/build/
+**/.gradle/
+build_log.txt
+
+# machine-specific
+local.properties
+
+# APKs are published as GitHub Releases, not in the repo
+*.apk
+
+# internal working files
+graphify-out/
+.graphify*
+project-brief.md

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Pure black everywhere: on the Rokid waveguide, black = transparent.
+         Any lit pixel glows green, so the only light we emit is the text itself. -->
+    <style name="BlackTheme" parent="android:Theme.Material.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:colorBackground">@android:color/black</item>
+        <item name="android:navigationBarColor">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/black</item>
+        <!-- CRITICAL for Rokid glasses: with d-pad/keyboard navigation Android
+             draws a translucent "focus highlight" wash over the focused view.
+             On the see-through waveguide any non-black pixel glows green, so
+             that wash becomes a solid green block. Kill it app-wide. -->
+        <item name="android:defaultFocusHighlightEnabled">false</item>
+    </style>
+</resources>

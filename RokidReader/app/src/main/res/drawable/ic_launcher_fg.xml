@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Simple open-book glyph in green, matching the monochrome display -->
+    <path
+        android:fillColor="#00E676"
+        android:pathData="M54,34 C48,29 39,27 30,27 L30,75 C39,75 48,77 54,82 C60,77 69,75 78,75 L78,27 C69,27 60,29 54,34 Z M54,40 C58,37 63,35 69,34.5 L69,68 C63,68.5 58,70 54,72.5 C50,70 45,68.5 39,68 L39,34.5 C45,35 50,37 54,40 Z" />
+</vector>
