@@ -9,8 +9,13 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.text.Layout
+import android.text.SpannableString
+import android.text.Spanned
 import android.text.StaticLayout
 import android.text.TextPaint
+import android.text.style.ForegroundColorSpan
+import android.text.style.UnderlineSpan
+import org.json.JSONArray
 import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.View
@@ -85,8 +90,15 @@ class ReaderView(
 
     // content
     private var text: String = ""
+    private var spannable: SpannableString? = null
     private var loading = true
     private var error: String? = null
+
+    // book structure + annotations (also served to the companion phone app)
+    var toc: List<TocEntry> = emptyList(); private set
+    val highlights: MutableList<IntArray> = ArrayList()
+    val bookPath: String get() = path
+    val bookText: String get() = text
 
     // modes: "page" | "rsvp" | "scroll"
     private var mode: String = Prefs.bookMode(context, path)
@@ -149,9 +161,12 @@ class ReaderView(
         applyPaint()
         Thread {
             try {
-                val t = Books.loadText(context, File(path))
+                val book = Books.loadBook(context, File(path))
                 post {
-                    text = t
+                    text = book.text
+                    toc = book.toc
+                    spannable = SpannableString(text)
+                    loadHighlights()
                     loading = false
                     indexWords()
                     buildChunks()
@@ -210,6 +225,69 @@ class ReaderView(
         hudPaint.textSize = 13f * resources.displayMetrics.scaledDensity
     }
 
+    // ---------------- highlights (marked on the phone, shown here) ----------------
+
+    private fun loadHighlights() {
+        highlights.clear()
+        try {
+            val arr = JSONArray(Prefs.highlightsJson(context, path))
+            for (i in 0 until arr.length()) {
+                val pair = arr.getJSONArray(i)
+                highlights.add(intArrayOf(pair.getInt(0), pair.getInt(1)))
+            }
+        } catch (_: Exception) { }
+        applyHighlightSpans()
+    }
+
+    private fun persistHighlights() {
+        val arr = JSONArray()
+        for (h in highlights) arr.put(JSONArray().put(h[0]).put(h[1]))
+        Prefs.setHighlightsJson(context, path, arr.toString())
+    }
+
+    /** On the monochrome waveguide a "highlight" = brighter text + underline. */
+    private fun applyHighlightSpans() {
+        val s = spannable ?: return
+        for (sp in s.getSpans(0, s.length, ForegroundColorSpan::class.java)) s.removeSpan(sp)
+        for (sp in s.getSpans(0, s.length, UnderlineSpan::class.java)) s.removeSpan(sp)
+        for (h in highlights) {
+            val a = h[0].coerceIn(0, text.length)
+            val b = h[1].coerceIn(0, text.length)
+            if (b > a) {
+                s.setSpan(ForegroundColorSpan(0xFFFFFFFF.toInt()), a, b, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                s.setSpan(UnderlineSpan(), a, b, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+        }
+        cachedChunkKey = ""
+        invalidate()
+    }
+
+    fun addHighlight(start: Int, end: Int) {
+        if (end <= start) return
+        highlights.add(intArrayOf(start, end))
+        persistHighlights()
+        applyHighlightSpans()
+        hud("Highlight added")
+    }
+
+    fun removeHighlightsOverlapping(offset: Int, endOffset: Int) {
+        highlights.removeAll { it[0] < endOffset && it[1] > offset }
+        persistHighlights()
+        applyHighlightSpans()
+        hud("Highlight removed")
+    }
+
+    /** Jump requested from the companion phone app (TOC / slider / bookmark / tap). */
+    fun gotoFromRemote(offset: Int) {
+        if (loading || error != null) return
+        stopMotion()
+        goToOffset(offset)
+        savePosition()
+        hud("Moved from phone")
+    }
+
+    fun currentOffset(): Int = currentCharOffset()
+
     /** Status snapshot for the companion app (called from the server thread). */
     fun fillStatus(state: JSONObject) {
         state.put("screen", "reader")
@@ -226,6 +304,9 @@ class ReaderView(
             else -> 0
         }
         state.put("percent", pct)
+        state.put("offset", currentCharOffset())
+        state.put("length", text.length)
+        state.put("path", path)
     }
 
     // ---------------- layout / pagination ----------------
@@ -242,7 +323,8 @@ class ReaderView(
     private fun rebuildLayout() {
         if (text.isEmpty() || width == 0 || height == 0) return
         val innerW = width - padding * 2
-        val l = StaticLayout.Builder.obtain(text, 0, text.length, paint, innerW)
+        val cs: CharSequence = spannable ?: text
+        val l = StaticLayout.Builder.obtain(cs, 0, cs.length, paint, innerW)
             .setAlignment(Layout.Alignment.ALIGN_NORMAL)
             .setLineSpacing(0f, 1.2f)
             .setIncludePad(false)
@@ -802,7 +884,9 @@ class ReaderView(
         val idx = chunkIndex.coerceIn(0, starts.size - 1)
         val key = "$mode:$idx:${paint.textSize}:${paint.color}:$width:$areaHeightPct"
         if (key != cachedChunkKey) {
-            val chunkText = text.substring(starts[idx], ends[idx]).replace('\n', ' ')
+            // subSequence keeps highlight spans; chunks rarely contain newlines
+            val chunkText: CharSequence = spannable?.subSequence(starts[idx], ends[idx])
+                ?: text.substring(starts[idx], ends[idx]).replace('\n', ' ')
             val p = TextPaint(paint)
             var l: StaticLayout
             while (true) {

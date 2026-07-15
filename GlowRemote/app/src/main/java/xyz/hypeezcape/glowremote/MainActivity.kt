@@ -75,6 +75,10 @@ class MainActivity : Activity() {
         // ---- send book ----
         root.addView(section("Books"))
         root.addView(btn("📖  Send a book to the glasses") { pickBook() })
+        root.addView(btn("📑  Reader view — navigate & highlight") {
+            if (ip.isEmpty()) { toast("Connect to the glasses first") }
+            else startActivity(Intent(this, ReaderActivity::class.java).putExtra("ip", ip))
+        })
 
         // ---- remote ----
         root.addView(section("Remote control"))

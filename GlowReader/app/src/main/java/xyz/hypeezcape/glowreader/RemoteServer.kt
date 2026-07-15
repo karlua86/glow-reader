@@ -97,6 +97,69 @@ object RemoteServer {
                 when {
                     path == "/ping" -> respond(s, 200, "text/plain", "glowreader".toByteArray())
                     path == "/status" -> respond(s, 200, "application/json", status(ctx).toString().toByteArray())
+                    path == "/book" -> {
+                        val r = AppState.reader
+                        if (r == null) respond(s, 409, "application/json", "{\"error\":\"no book open\"}".toByteArray())
+                        else respond(s, 200, "application/json", bookInfo(ctx, r).toString().toByteArray())
+                    }
+                    path == "/text" -> {
+                        val r = AppState.reader
+                        if (r == null) respond(s, 409, "text/plain", "no book open".toByteArray())
+                        else respond(s, 200, "text/plain; charset=utf-8", r.bookText.toByteArray(Charsets.UTF_8))
+                    }
+                    path == "/goto" && method == "POST" -> {
+                        val off = query["offset"]?.toIntOrNull()
+                        val r = AppState.reader
+                        if (off == null || r == null) respond(s, 400, "text/plain", "bad".toByteArray())
+                        else {
+                            AppState.main.post { r.gotoFromRemote(off) }
+                            respond(s, 200, "text/plain", "ok".toByteArray())
+                        }
+                    }
+                    path == "/hl/add" && method == "POST" -> {
+                        val a = query["start"]?.toIntOrNull(); val b = query["end"]?.toIntOrNull()
+                        val r = AppState.reader
+                        if (a == null || b == null || r == null) respond(s, 400, "text/plain", "bad".toByteArray())
+                        else {
+                            AppState.main.post { r.addHighlight(a, b) }
+                            respond(s, 200, "text/plain", "ok".toByteArray())
+                        }
+                    }
+                    path == "/hl/del" && method == "POST" -> {
+                        val a = query["start"]?.toIntOrNull(); val b = query["end"]?.toIntOrNull()
+                        val r = AppState.reader
+                        if (a == null || b == null || r == null) respond(s, 400, "text/plain", "bad".toByteArray())
+                        else {
+                            AppState.main.post { r.removeHighlightsOverlapping(a, b) }
+                            respond(s, 200, "text/plain", "ok".toByteArray())
+                        }
+                    }
+                    path == "/bm/add" && method == "POST" -> {
+                        val off = query["offset"]?.toIntOrNull()
+                        val r = AppState.reader
+                        if (off == null || r == null) respond(s, 400, "text/plain", "bad".toByteArray())
+                        else {
+                            val arr = try { org.json.JSONArray(Prefs.bookmarksJson(ctx, r.bookPath)) } catch (_: Exception) { org.json.JSONArray() }
+                            arr.put(JSONObject().put("o", off).put("label", query["label"] ?: ""))
+                            Prefs.setBookmarksJson(ctx, r.bookPath, arr.toString())
+                            respond(s, 200, "text/plain", "ok".toByteArray())
+                        }
+                    }
+                    path == "/bm/del" && method == "POST" -> {
+                        val off = query["offset"]?.toIntOrNull()
+                        val r = AppState.reader
+                        if (off == null || r == null) respond(s, 400, "text/plain", "bad".toByteArray())
+                        else {
+                            val arr = try { org.json.JSONArray(Prefs.bookmarksJson(ctx, r.bookPath)) } catch (_: Exception) { org.json.JSONArray() }
+                            val out = org.json.JSONArray()
+                            for (i in 0 until arr.length()) {
+                                val o = arr.getJSONObject(i)
+                                if (o.optInt("o") != off) out.put(o)
+                            }
+                            Prefs.setBookmarksJson(ctx, r.bookPath, out.toString())
+                            respond(s, 200, "text/plain", "ok".toByteArray())
+                        }
+                    }
                     path == "/set" && method == "POST" -> {
                         val ok = applySetting(ctx, query["k"] ?: "", query["v"] ?: "")
                         respond(s, if (ok) 200 else 400, "text/plain", (if (ok) "ok" else "bad key").toByteArray())
@@ -126,6 +189,23 @@ object RemoteServer {
                 }
             } catch (_: Exception) { /* client gone — ignore */ }
         }
+    }
+
+    /** Full book metadata for the phone reader: TOC, highlights, bookmarks, position. */
+    private fun bookInfo(ctx: Context, r: ReaderView): JSONObject {
+        val toc = JSONArray()
+        for (t in r.toc) toc.put(JSONObject().put("title", t.title).put("offset", t.offset))
+        val hls = JSONArray()
+        for (h in r.highlights.toList()) hls.put(JSONArray().put(h[0]).put(h[1]))
+        val bms = try { JSONArray(Prefs.bookmarksJson(ctx, r.bookPath)) } catch (_: Exception) { JSONArray() }
+        return JSONObject()
+            .put("path", r.bookPath)
+            .put("title", java.io.File(r.bookPath).nameWithoutExtension)
+            .put("length", r.bookText.length)
+            .put("offset", r.currentOffset())
+            .put("toc", toc)
+            .put("highlights", hls)
+            .put("bookmarks", bms)
     }
 
     private fun status(ctx: Context): JSONObject {

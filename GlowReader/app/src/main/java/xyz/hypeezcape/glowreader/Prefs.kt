@@ -93,6 +93,18 @@ object Prefs {
     fun setBookMode(ctx: Context, path: String, mode: String) =
         sp(ctx).edit().putString("mode:$path", mode).apply()
 
+    /** Highlights per book: JSON array of [start, end] char-offset pairs. */
+    fun highlightsJson(ctx: Context, path: String): String =
+        sp(ctx).getString("hl:$path", "[]") ?: "[]"
+    fun setHighlightsJson(ctx: Context, path: String, json: String) =
+        sp(ctx).edit().putString("hl:$path", json).apply()
+
+    /** Bookmarks per book: JSON array of {"o": offset, "label": text}. */
+    fun bookmarksJson(ctx: Context, path: String): String =
+        sp(ctx).getString("bm:$path", "[]") ?: "[]"
+    fun setBookmarksJson(ctx: Context, path: String, json: String) =
+        sp(ctx).edit().putString("bm:$path", json).apply()
+
     /** Text brightness levels: pure white = maximum glow on the waveguide, down to dim gray. */
     val BRIGHT_COLORS = intArrayOf(0xFFFFFFFF.toInt(), 0xFFC8C8C8.toInt(), 0xFF969696.toInt(), 0xFF6E6E6E.toInt(), 0xFF4B4B4B.toInt())
 }

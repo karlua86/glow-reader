@@ -14,6 +14,11 @@ data class Book(val file: File) {
     val ext: String get() = file.extension.lowercase()
 }
 
+data class TocEntry(val title: String, val offset: Int)
+
+/** A loaded book: full plain text plus table-of-contents entries (may be empty). */
+data class BookContent(val text: String, val toc: List<TocEntry>)
+
 object Books {
 
     private val EXTS = setOf("txt", "md", "epub", "pdf")
@@ -40,16 +45,41 @@ object Books {
         return out.sortedByDescending { it.file.lastModified() }
     }
 
-    /** Load a book's full text, reflowed to plain paragraphs. Heavy — call off the UI thread. */
-    fun loadText(ctx: Context, file: File): String {
-        val text = when (file.extension.lowercase()) {
-            "txt" -> file.readBytes().toString(Charsets.UTF_8)
-            "md" -> stripMarkdown(file.readBytes().toString(Charsets.UTF_8))
+    /** Load a book's full text + TOC, reflowed to plain paragraphs. Heavy — call off the UI thread. */
+    fun loadBook(ctx: Context, file: File): BookContent {
+        return when (file.extension.lowercase()) {
+            "txt" -> {
+                val text = normalize(file.readBytes().toString(Charsets.UTF_8))
+                BookContent(text, detectChapters(text))
+            }
+            "md" -> {
+                val text = normalize(stripMarkdown(file.readBytes().toString(Charsets.UTF_8)))
+                BookContent(text, detectChapters(text))
+            }
             "epub" -> loadEpub(file)
-            "pdf" -> loadPdf(ctx, file)
+            "pdf" -> {
+                val text = normalize(loadPdf(ctx, file))
+                BookContent(text, detectChapters(text))
+            }
             else -> throw IllegalArgumentException("Unsupported: ${file.name}")
         }
-        return normalize(text)
+    }
+
+    /** Back-compat: text only. */
+    fun loadText(ctx: Context, file: File): String = loadBook(ctx, file).text
+
+    // ---------- chapter detection for flat text (TXT/MD/PDF) ----------
+
+    private fun detectChapters(text: String): List<TocEntry> {
+        val toc = ArrayList<TocEntry>()
+        val re = Regex(
+            "(?im)^(?:chapter|part|book|section|prologue|epilogue|introduction|preface|appendix)\\b[^\\n]{0,70}$"
+        )
+        for (m in re.findAll(text)) {
+            toc.add(TocEntry(m.value.trim().take(70), m.range.first))
+            if (toc.size >= 400) break
+        }
+        return toc
     }
 
     // ---------- TXT / MD ----------
@@ -64,7 +94,7 @@ object Books {
 
     // ---------- EPUB ----------
 
-    private fun loadEpub(file: File): String {
+    private fun loadEpub(file: File): BookContent {
         ZipFile(file).use { zip ->
             fun read(path: String): String? {
                 val entry = zip.getEntry(path) ?: return null
@@ -78,7 +108,6 @@ object Books {
             val opf = read(opfPath) ?: throw IllegalStateException("Missing OPF: $opfPath")
             val opfDir = opfPath.substringBeforeLast('/', "")
 
-            // manifest: id -> href
             val hrefById = HashMap<String, String>()
             for (m in Regex("<item\\b[^>]*>").findAll(opf)) {
                 val tag = m.value
@@ -86,25 +115,43 @@ object Books {
                 val href = Regex("\\bhref=\"([^\"]+)\"").find(tag)?.groupValues?.get(1) ?: continue
                 hrefById[id] = href
             }
-            // spine: reading order
+
+            // Each spine document becomes a TOC entry. Text is normalized
+            // per-chunk so recorded offsets stay valid in the final string.
             val sb = StringBuilder()
+            val toc = ArrayList<TocEntry>()
             for (m in Regex("<itemref\\b[^>]*\\bidref=\"([^\"]+)\"").findAll(opf)) {
                 val href = hrefById[m.groupValues[1]] ?: continue
                 val path = (if (opfDir.isEmpty()) href else "$opfDir/$href")
                 val decoded = try { URLDecoder.decode(path, "UTF-8") } catch (_: Exception) { path }
                 val xhtml = read(decoded) ?: read(path) ?: continue
-                sb.append(htmlToText(xhtml)).append("\n\n")
+                val chunk = normalize(htmlToText(xhtml))
+                if (chunk.isBlank()) continue
+                val title = extractTitle(xhtml) ?: "Section ${toc.size + 1}"
+                toc.add(TocEntry(title, sb.length))
+                sb.append(chunk).append("\n\n")
             }
             if (sb.isBlank()) throw IllegalStateException("EPUB spine produced no text")
-            return sb.toString()
+            return BookContent(sb.toString().trimEnd(), toc)
         }
+    }
+
+    private fun extractTitle(xhtml: String): String? {
+        for (re in listOf(
+            Regex("(?is)<h[1-3][^>]*>(.*?)</h[1-3]>"),
+            Regex("(?is)<title[^>]*>(.*?)</title>")
+        )) {
+            val raw = re.find(xhtml)?.groupValues?.get(1) ?: continue
+            val t = decodeEntities(raw.replace(Regex("<[^>]+>"), "")).replace(Regex("\\s+"), " ").trim()
+            if (t.isNotBlank() && t.length in 1..80 && !t.equals("unknown", true)) return t
+        }
+        return null
     }
 
     private fun htmlToText(src: String): String {
         var s = src
         s = s.replace(Regex("(?is)<(head|style|script)\\b.*?</\\1>"), "")
         s = s.replace(Regex("(?s)<!--.*?-->"), "")
-        // block-level boundaries become paragraph breaks
         s = s.replace(Regex("(?i)</(p|h[1-6]|li|blockquote|tr|dt|dd)>"), "\n\n")
         s = s.replace(Regex("(?i)<br\\s*/?>"), "\n")
         s = s.replace(Regex("(?i)<(p|h[1-6]|li|blockquote|div|section)\\b[^>]*>"), "\n")
@@ -141,11 +188,6 @@ object Books {
         }
     }
 
-    /**
-     * PDF extraction hard-breaks every visual line. Rejoin lines into paragraphs:
-     * blank line = paragraph break; sentence-final punctuation followed by an
-     * uppercase start is also treated as a break.
-     */
     private fun reflowPdf(raw: String): String {
         val lines = raw.replace("\r\n", "\n").split('\n')
         val sb = StringBuilder()
@@ -164,7 +206,6 @@ object Books {
                 }
             }
             if (para.isNotEmpty()) para.append(' ')
-            // de-hyphenate words split across lines
             if (para.isNotEmpty() && para.length >= 2 && para[para.length - 1] == ' ' && para[para.length - 2] == '-') {
                 para.setLength(para.length - 2)
             }
