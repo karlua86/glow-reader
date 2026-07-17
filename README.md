@@ -4,6 +4,26 @@
 
 I'm not from an IT background — I'm a property agent and I don't understand a single line of code. This entire app was built by **[Claude Code](https://claude.com/claude-code)** (Anthropic's AI coding assistant). I just described what I wanted in plain English, tested it on my glasses, and told it what to fix.
 
+## See it for yourself
+
+Real captures from the glasses, reading in a dark room — the background is genuinely invisible, only the words float:
+
+| Floating text (page mode) | One word at a time (RSVP) | Sentence mode |
+|---|---|---|
+| ![Page mode](photos/page-mode.jpg) | ![RSVP mode](photos/rsvp-word-mode.jpg) | ![Sentence mode](photos/sentence-mode.jpg) |
+
+| The library at night | Paragraph mode | Status line (wpm always visible) |
+|---|---|---|
+| ![Library](photos/library-at-night.jpg) | ![Paragraph mode](photos/paragraph-mode.jpg) | ![Status line](photos/page-mode-with-status.jpg) |
+
+And the companion phone app — remote control, live settings, and the AI book summary (this one just finished summarizing *The Psychology of Money*):
+
+| Main screen + AI summary | Remote & live settings |
+|---|---|
+| ![Phone app](photos/phone-remote-main.png) | ![Phone controls](photos/phone-remote-controls.png) |
+
+*(A demo video is attached to the [latest release](../../releases/latest).)*
+
 ## The problem it solves
 
 Reader apps sideloaded onto the glasses show up as a big glowing green block at night — the app background lights up the whole see-through display. Glow Reader's background is truly invisible: **all you see are floating words.**
