@@ -39,6 +39,7 @@ class MainActivity : Activity() {
     private lateinit var statusView: TextView
     private lateinit var nowView: TextView
     private lateinit var aiProvider: android.widget.Spinner
+    private lateinit var aiLength: android.widget.Spinner
     private lateinit var aiKey: EditText
     private lateinit var aiStatus: TextView
 
@@ -103,6 +104,12 @@ class MainActivity : Activity() {
         aiProvider.setSelection(prefs().getInt("ai_provider", 0))
         root.addView(aiProvider)
         root.addView(aiKey)
+        aiLength = android.widget.Spinner(this)
+        aiLength.adapter = android.widget.ArrayAdapter(
+            this, android.R.layout.simple_spinner_dropdown_item,
+            Summarizer.LENGTHS.map { it.label })
+        aiLength.setSelection(prefs().getInt("ai_length", 1))
+        root.addView(aiLength)
         aiStatus = TextView(this).apply { textSize = 13f; setPadding(0, dp(4), 0, dp(4)) }
         root.addView(btn("🤖  Summarize book on glasses → send back as a book") { runSummary() })
         root.addView(aiStatus)
@@ -339,10 +346,12 @@ class MainActivity : Activity() {
         val pos = aiProvider.selectedItemPosition
         val key = aiKey.text.toString().trim()
         if (key.isEmpty()) { toast("Paste your ${Summarizer.PROVIDERS[pos].label} API key first"); return }
-        prefs().edit().putString(Summarizer.PROVIDERS[pos].prefKey, key).putInt("ai_provider", pos).apply()
+        val lenPos = aiLength.selectedItemPosition
+        prefs().edit().putString(Summarizer.PROVIDERS[pos].prefKey, key)
+            .putInt("ai_provider", pos).putInt("ai_length", lenPos).apply()
         if (Summarizer.running) { toast("A summary is already running"); return }
         aiStatus.text = "Starting… keep the app open."
-        Summarizer.summarize(ip, pos, key,
+        Summarizer.summarize(ip, pos, key, lenPos,
             onProgress = { msg -> ui.post { aiStatus.text = "⏳ $msg" } },
             onDone = { ok, msg -> ui.post {
                 aiStatus.text = (if (ok) "✅ " else "❌ ") + msg

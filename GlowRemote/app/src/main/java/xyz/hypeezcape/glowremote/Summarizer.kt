@@ -27,15 +27,38 @@ object Summarizer {
         Provider("Claude (Anthropic)", "key_claude")
     )
 
+    /** Summary length options: label, filename tag, per-chapter instruction, Claude token cap. */
+    data class Length(val label: String, val tag: String, val instruction: String, val maxTokens: Int)
+
+    val LENGTHS = listOf(
+        Length(
+            "Short — 1-2 sentences per chapter", "Short",
+            "Write only 1-2 sentences (at most 40 words) capturing this chapter's single most important idea.",
+            300
+        ),
+        Length(
+            "Medium — ~150 words per chapter", "Medium",
+            "Write a concise summary of about 150 words: the core ideas and main takeaways only, no examples or padding.",
+            900
+        ),
+        Length(
+            "Long — ~400 words per chapter", "Long",
+            "Write a detailed summary of up to 400 words: the core ideas, key arguments or events in the order they appear, and the main takeaways.",
+            2500
+        )
+    )
+
     @Volatile var running = false; private set
 
     fun summarize(
         ip: String,
         providerIndex: Int,
         apiKey: String,
+        lengthIndex: Int = 1,
         onProgress: (String) -> Unit,
         onDone: (Boolean, String) -> Unit
     ) {
+        val len = LENGTHS[lengthIndex.coerceIn(0, LENGTHS.size - 1)]
         if (running) { onDone(false, "A summary is already running"); return }
         running = true
         thread {
@@ -54,22 +77,22 @@ object Summarizer {
                 onProgress("Summarizing ${chunks.size} chapter(s)…")
 
                 val sb = StringBuilder()
-                sb.append("# $title — AI Summary\n\n")
-                sb.append("Generated ${SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())} · ${PROVIDERS[providerIndex].label} · chapter by chapter\n\n")
+                sb.append("# $title — AI Summary (${len.tag})\n\n")
+                sb.append("Generated ${SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())} · ${PROVIDERS[providerIndex].label} · ${len.tag} · chapter by chapter\n\n")
 
                 for ((i, chunk) in chunks.withIndex()) {
                     onProgress("Chapter ${i + 1} of ${chunks.size}: ${chunk.first.take(30)}…")
                     val summary = try {
-                        callApi(providerIndex, apiKey, prompt(title, chunk.first, chunk.second))
+                        callApi(providerIndex, apiKey, prompt(title, chunk.first, chunk.second, len), len)
                     } catch (e: Exception) {
-                        try { callApi(providerIndex, apiKey, prompt(title, chunk.first, chunk.second)) }
+                        try { callApi(providerIndex, apiKey, prompt(title, chunk.first, chunk.second, len), len) }
                         catch (e2: Exception) { "(Summary failed for this chapter: ${e2.message})" }
                     }
                     sb.append("## ${chunk.first}\n\n").append(summary.trim()).append("\n\n")
                 }
 
                 onProgress("Sending summary to the glasses…")
-                val name = (title.take(60) + " - AI Summary.md")
+                val name = (title.take(60) + " - AI Summary (${len.tag}).md")
                 val body = sb.toString().toByteArray(Charsets.UTF_8)
                 val up = http(
                     "http://$ip:8765/upload?name=${URLEncoder.encode(name, "UTF-8")}",
@@ -131,19 +154,18 @@ object Summarizer {
         return out
     }
 
-    private fun prompt(bookTitle: String, chapterTitle: String, chapterText: String): String =
+    private fun prompt(bookTitle: String, chapterTitle: String, chapterText: String, len: Length): String =
         "You are summarizing one chapter of the book \"$bookTitle\".\n" +
-        "Write a detailed summary of this chapter: its core ideas, key arguments or events in the order they appear, and the main takeaways. " +
-        "Make it as long as the chapter's content genuinely requires — a rich chapter deserves a thorough summary, a thin one a short summary. Do not pad. " +
+        len.instruction + " " +
         "Respond in the same language as the chapter text. " +
         "Output only the summary, no preamble.\n\n" +
         "Chapter: $chapterTitle\n\nText:\n$chapterText"
 
     // ---------------- providers ----------------
 
-    private fun callApi(providerIndex: Int, key: String, prompt: String): String {
+    private fun callApi(providerIndex: Int, key: String, prompt: String, len: Length): String {
         return when (providerIndex) {
-            2 -> callClaude(key, prompt)
+            2 -> callClaude(key, prompt, len.maxTokens)
             1 -> callOpenAiStyle("https://api.openai.com/v1/chat/completions", "gpt-4o-mini", key, prompt)
             else -> callOpenAiStyle("https://api.deepseek.com/chat/completions", "deepseek-chat", key, prompt)
         }
@@ -159,10 +181,10 @@ object Summarizer {
             .getJSONObject("message").getString("content")
     }
 
-    private fun callClaude(key: String, prompt: String): String {
+    private fun callClaude(key: String, prompt: String, maxTokens: Int): String {
         val body = JSONObject()
             .put("model", "claude-haiku-4-5-20251001")
-            .put("max_tokens", 8000)
+            .put("max_tokens", maxTokens)
             .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)))
         val resp = httpJson(
             "https://api.anthropic.com/v1/messages", body.toString(),
