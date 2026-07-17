@@ -220,7 +220,11 @@ class ReaderView(
     }
 
     private fun applyPaint() {
-        paint.color = Prefs.BRIGHT_COLORS[Prefs.brightLevel(context)]
+        // Low-light also dims the text itself two extra levels — guarantees a
+        // visible effect even if the OS ignores the window-brightness request.
+        var level = Prefs.brightLevel(context)
+        if (Prefs.lowLight(context)) level = (level + 2).coerceAtMost(4)
+        paint.color = Prefs.BRIGHT_COLORS[level]
         paint.textSize = Prefs.fontSizeSp(context) * resources.displayMetrics.scaledDensity
         hudPaint.textSize = 13f * resources.displayMetrics.scaledDensity
     }

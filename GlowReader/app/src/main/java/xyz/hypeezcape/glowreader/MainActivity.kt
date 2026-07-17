@@ -40,6 +40,21 @@ class MainActivity : Activity() {
         }
     }
 
+    // Low-light must apply on EVERY screen — previously only the reader set
+    // window brightness, so toggling from the phone while on the library
+    // looked like it did nothing.
+    private val prefListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+        if (key == "lowLight") handler.post { applyLowLight() }
+    }
+
+    private fun applyLowLight() {
+        val lp = window.attributes
+        lp.screenBrightness =
+            if (Prefs.lowLight(this)) 0.03f
+            else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        window.attributes = lp
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -69,12 +84,15 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         AppState.keySink = { code -> onKeyDown(code, null) }
+        applyLowLight()
+        Prefs.sp(this).registerOnSharedPreferenceChangeListener(prefListener)
         rescan()
         handler.postDelayed(autoRescan, 2000)
     }
 
     override fun onPause() {
         super.onPause()
+        Prefs.sp(this).unregisterOnSharedPreferenceChangeListener(prefListener)
         handler.removeCallbacks(autoRescan)
     }
 

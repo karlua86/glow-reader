@@ -168,6 +168,21 @@ object RemoteServer {
                         val ok = command(ctx, query["k"] ?: "", query["path"])
                         respond(s, if (ok) 200 else 400, "text/plain", (if (ok) "ok" else "bad cmd").toByteArray())
                     }
+                    path == "/delbook" && method == "POST" -> {
+                        val p = query["path"]
+                        val f = p?.let { File(it) }
+                        // only allow deleting book files inside our scan folders
+                        val allowed = f != null && f.isFile &&
+                                f.extension.lowercase() in setOf("txt", "md", "epub", "pdf") &&
+                                Books.scanDirs(ctx).any { dir ->
+                                    f.canonicalPath.startsWith(dir.canonicalPath + File.separator)
+                                }
+                        if (!allowed) respond(s, 400, "text/plain", "not allowed".toByteArray())
+                        else {
+                            val ok = try { f!!.delete() } catch (_: Exception) { false }
+                            respond(s, if (ok) 200 else 500, "text/plain", (if (ok) "deleted" else "failed").toByteArray())
+                        }
+                    }
                     path == "/upload" && method == "POST" -> {
                         val name = sanitize(query["name"] ?: "book_${System.currentTimeMillis()}.txt")
                         val dir = ctx.getExternalFilesDir("Books")!!

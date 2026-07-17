@@ -38,6 +38,9 @@ class MainActivity : Activity() {
     private lateinit var ipBox: EditText
     private lateinit var statusView: TextView
     private lateinit var nowView: TextView
+    private lateinit var aiProvider: android.widget.Spinner
+    private lateinit var aiKey: EditText
+    private lateinit var aiStatus: TextView
 
     private val ui = Handler(Looper.getMainLooper())
     private var lastStatus: JSONObject? = null
@@ -79,6 +82,30 @@ class MainActivity : Activity() {
             if (ip.isEmpty()) { toast("Connect to the glasses first") }
             else startActivity(Intent(this, ReaderActivity::class.java).putExtra("ip", ip))
         })
+        root.addView(btn("🗂  Manage / delete books…") { manageBooks() })
+
+        // ---- AI summary (bring your own API key) ----
+        root.addView(section("AI summary of current book"))
+        aiProvider = android.widget.Spinner(this)
+        aiProvider.adapter = android.widget.ArrayAdapter(
+            this, android.R.layout.simple_spinner_dropdown_item,
+            Summarizer.PROVIDERS.map { it.label })
+        aiKey = EditText(this).apply {
+            hint = "Paste your API key here (stored only on this phone)"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        aiProvider.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) {
+                aiKey.setText(prefs().getString(Summarizer.PROVIDERS[pos].prefKey, "") ?: "")
+            }
+            override fun onNothingSelected(p: android.widget.AdapterView<*>?) {}
+        }
+        aiProvider.setSelection(prefs().getInt("ai_provider", 0))
+        root.addView(aiProvider)
+        root.addView(aiKey)
+        aiStatus = TextView(this).apply { textSize = 13f; setPadding(0, dp(4), 0, dp(4)) }
+        root.addView(btn("🤖  Summarize book on glasses → send back as a book") { runSummary() })
+        root.addView(aiStatus)
 
         // ---- remote ----
         root.addView(section("Remote control"))
@@ -275,6 +302,52 @@ class MainActivity : Activity() {
         if (books.length() == 0) { toast("No books on the glasses yet"); return }
         val path = books.getJSONObject(0).getString("path")
         api("/cmd?k=open&path=${URLEncoder.encode(path, "UTF-8")}", ByteArray(0))
+    }
+
+    // ---------------- manage / delete books ----------------
+
+    private fun manageBooks() {
+        val books = lastStatus?.optJSONArray("books") ?: run { toast("Not connected"); return }
+        if (books.length() == 0) { toast("No books on the glasses"); return }
+        val labels = (0 until books.length()).map {
+            val b = books.getJSONObject(it)
+            "${b.getString("name")}  (${b.optLong("kb")} KB)"
+        }.toTypedArray()
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Books on the glasses")
+            .setItems(labels) { _, which ->
+                val b = books.getJSONObject(which)
+                android.app.AlertDialog.Builder(this)
+                    .setTitle("Delete \"${b.getString("name")}\"?")
+                    .setMessage("This removes the file from the glasses. It cannot be undone.")
+                    .setPositiveButton("Delete") { _, _ ->
+                        api("/delbook?path=${URLEncoder.encode(b.getString("path"), "UTF-8")}", ByteArray(0)) { r ->
+                            toast(if (r == "deleted") "Deleted" else "Could not delete (${r ?: "no reply"})")
+                        }
+                    }
+                    .setNegativeButton("Cancel", null)
+                    .show()
+            }
+            .setNegativeButton("Close", null)
+            .show()
+    }
+
+    // ---------------- AI summary ----------------
+
+    private fun runSummary() {
+        if (ip.isEmpty()) { toast("Connect to the glasses first"); return }
+        val pos = aiProvider.selectedItemPosition
+        val key = aiKey.text.toString().trim()
+        if (key.isEmpty()) { toast("Paste your ${Summarizer.PROVIDERS[pos].label} API key first"); return }
+        prefs().edit().putString(Summarizer.PROVIDERS[pos].prefKey, key).putInt("ai_provider", pos).apply()
+        if (Summarizer.running) { toast("A summary is already running"); return }
+        aiStatus.text = "Starting… keep the app open."
+        Summarizer.summarize(ip, pos, key,
+            onProgress = { msg -> ui.post { aiStatus.text = "⏳ $msg" } },
+            onDone = { ok, msg -> ui.post {
+                aiStatus.text = (if (ok) "✅ " else "❌ ") + msg
+                toast(msg)
+            } })
     }
 
     // ---------------- book upload ----------------
