@@ -146,6 +146,13 @@ class ReaderView(
     private val areaTop: Int get() = (height * areaTopPct / 100f).toInt() + padding
     private val areaHeight: Int get() = (height * areaHeightPct / 100f).toInt() - padding * 2
 
+    /** Bottom strip reserved for the status line — book text NEVER draws here. */
+    private val statusStripH: Int get() = (hudPaint.textSize * 2.2f).toInt()
+
+    /** Text area height clamped so it can never overlap the status strip. */
+    private val contentHeight: Int
+        get() = areaHeight.coerceAtMost(height - statusStripH - areaTop).coerceAtLeast(50)
+
     // live settings sync (keys or companion phone app both write Prefs)
     private var pendingReload = false
     private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -334,7 +341,7 @@ class ReaderView(
             .setIncludePad(false)
             .build()
         layout = l
-        val innerH = (areaHeight - hudPaint.textSize.toInt() * 2).coerceAtLeast(50)
+        val innerH = contentHeight
         val starts = ArrayList<Int>()
         var line = 0
         while (line < l.lineCount) {
@@ -451,7 +458,7 @@ class ReaderView(
         override fun run() {
             if (!scrolling) return
             val l = layout ?: return
-            val maxY = (l.height - areaHeight).coerceAtLeast(0).toFloat()
+            val maxY = (l.height - contentHeight).coerceAtLeast(0).toFloat()
             scrollY = (scrollY + scrollPxPerFrame()).coerceAtMost(maxY)
             invalidate()
             if (scrollY >= maxY) {
@@ -598,14 +605,14 @@ class ReaderView(
             "sent", "para" -> moveChunk(if (forward) 1 else -1)
             "scroll" -> {
                 val l = layout ?: return
-                val maxY = (l.height - areaHeight).coerceAtLeast(0).toFloat()
+                val maxY = (l.height - contentHeight).coerceAtLeast(0).toFloat()
                 if (forward) {
-                    var lastFull = l.getLineForVertical((scrollY + areaHeight).toInt())
-                    if (l.getLineBottom(lastFull) > scrollY + areaHeight) lastFull--
+                    var lastFull = l.getLineForVertical((scrollY + contentHeight).toInt())
+                    if (l.getLineBottom(lastFull) > scrollY + contentHeight) lastFull--
                     val nl = (lastFull + 1).coerceAtMost(l.lineCount - 1)
                     scrollY = l.getLineTop(nl).toFloat().coerceAtMost(maxY)
                 } else {
-                    val target = (scrollY - areaHeight).coerceAtLeast(0f)
+                    val target = (scrollY - contentHeight).coerceAtLeast(0f)
                     var fl = l.getLineForVertical(target.toInt())
                     if (l.getLineTop(fl) < target) fl = (fl + 1).coerceAtMost(l.lineCount - 1)
                     scrollY = l.getLineTop(fl).toFloat()
@@ -837,8 +844,41 @@ class ReaderView(
             "sent", "para" -> drawChunk(canvas)
             else -> drawPage(canvas)
         }
-        hudText?.let {
-            canvas.drawText(it, padding.toFloat(), height - hudPaint.textSize * 0.6f, hudPaint)
+        drawBottomLine(canvas)
+    }
+
+    /**
+     * Persistent status line in its own reserved strip at the very bottom —
+     * always shows wpm in every mode, never overlapped by book text.
+     * Transient messages (settings changes etc.) temporarily replace it.
+     */
+    private fun drawBottomLine(canvas: Canvas) {
+        val msg = hudText ?: modeStatus()
+        val y = height - hudPaint.textSize * 0.8f
+        canvas.drawText(msg, (width - hudPaint.measureText(msg)) / 2f, y, hudPaint)
+    }
+
+    private fun modeStatus(): String {
+        val l = layout
+        return when (mode) {
+            "page" -> {
+                val total = pageStartLines.size.coerceAtLeast(1)
+                "${page + 1}/$total · $wpm wpm"
+            }
+            "rsvp" -> {
+                val pct = if (words.isEmpty()) 0 else wordIndex * 100 / words.size
+                "$pct% · $wpm wpm · ${if (playing) "▶" else "⏸"}"
+            }
+            "scroll" -> {
+                val pct = if (l != null && l.height > 0) (scrollY * 100 / l.height).toInt() else 0
+                "$pct% · $wpm wpm · ${if (scrolling) "▶" else "⏸"}"
+            }
+            else -> {
+                val (starts, _) = chunkArrays()
+                val total = starts.size.coerceAtLeast(1)
+                val what = if (mode == "para") "¶" else "S"
+                "$what ${chunkIndex + 1}/$total · $wpm wpm · ${if (playing) "▶" else "⏸"}"
+            }
         }
     }
 
@@ -846,7 +886,7 @@ class ReaderView(
         val l = layout ?: return
         if (pageStartLines.isEmpty()) return
         val first = pageStartLines[page]
-        val innerH = (areaHeight - hudPaint.textSize.toInt() * 2).coerceAtLeast(50)
+        val innerH = contentHeight
         canvas.save()
         canvas.clipRect(0, areaTop, width, areaTop + innerH)
         canvas.translate(padding.toFloat(), (areaTop - l.getLineTop(first)).toFloat())
@@ -857,28 +897,23 @@ class ReaderView(
     private fun drawScroll(canvas: Canvas) {
         val l = layout ?: return
         var clipTop = areaTop
-        var clipBottom = areaTop + areaHeight
+        var clipBottom = areaTop + contentHeight
         if (strictLines && l.lineCount > 0) {
             // Only lines that fit ENTIRELY inside the area are shown — a line
             // partly outside the window is hidden completely (no half words).
             var firstFull = l.getLineForVertical(scrollY.toInt())
             if (l.getLineTop(firstFull) < scrollY) firstFull++
-            var lastFull = l.getLineForVertical((scrollY + areaHeight).toInt())
-            if (l.getLineBottom(lastFull) > scrollY + areaHeight) lastFull--
+            var lastFull = l.getLineForVertical((scrollY + contentHeight).toInt())
+            if (l.getLineBottom(lastFull) > scrollY + contentHeight) lastFull--
             if (firstFull > lastFull || firstFull >= l.lineCount) return
             clipTop = (areaTop + (l.getLineTop(firstFull) - scrollY)).toInt()
             clipBottom = (areaTop + (l.getLineBottom(lastFull) - scrollY)).toInt()
         }
         canvas.save()
-        canvas.clipRect(0, clipTop, width, clipBottom)
+        canvas.clipRect(0, clipTop, width, clipBottom.coerceAtMost(areaTop + contentHeight))
         canvas.translate(padding.toFloat(), areaTop - scrollY)
         l.draw(canvas)
         canvas.restore()
-        if (!scrolling) {
-            val pctDone = if (l.height > 0) (scrollY * 100 / l.height).toInt() else 0
-            val status = "$pctDone%  ·  $wpm wpm  ·  ⏸"
-            canvas.drawText(status, (width - hudPaint.measureText(status)) / 2f, height - hudPaint.textSize * 2f, hudPaint)
-        }
     }
 
     /** Sentence/paragraph mode: current chunk wrapped and centered, auto-shrunk to fit. */
@@ -899,22 +934,19 @@ class ReaderView(
                     .setLineSpacing(0f, 1.2f)
                     .setIncludePad(false)
                     .build()
-                if (l.height <= areaHeight - hudPaint.textSize * 2 || p.textSize <= 14f) break
+                if (l.height <= contentHeight || p.textSize <= 14f) break
                 p.textSize = p.textSize * 0.9f
             }
             cachedChunkLayout = l
             cachedChunkKey = key
         }
         val l = cachedChunkLayout ?: return
-        val top = (areaTop + (areaHeight - l.height) / 2f).coerceAtLeast(areaTop.toFloat())
+        val top = (areaTop + (contentHeight - l.height) / 2f).coerceAtLeast(areaTop.toFloat())
         canvas.save()
+        canvas.clipRect(0, areaTop, width, areaTop + contentHeight)
         canvas.translate(padding.toFloat(), top)
         l.draw(canvas)
         canvas.restore()
-        val pct = idx * 100 / starts.size
-        val what = if (mode == "para") "¶" else "S"
-        val status = "$what ${idx + 1}/${starts.size} · $pct% · ${if (playing) "▶" else "⏸"}"
-        canvas.drawText(status, (width - hudPaint.measureText(status)) / 2f, height - hudPaint.textSize * 2f, hudPaint)
     }
 
     private fun drawRsvp(canvas: Canvas) {
@@ -926,12 +958,9 @@ class ReaderView(
             w = big.measureText(word)
         }
         val x = (width - w) / 2f
-        val centerY = areaTop + areaHeight / 2f
+        val centerY = areaTop + contentHeight / 2f
         val y = centerY - (big.descent() + big.ascent()) / 2f
         canvas.drawText(word, x, y, big)
-        val pct = if (words.isEmpty()) 0 else wordIndex * 100 / words.size
-        val status = "$pct%  ·  $wpm wpm  ·  ${if (playing) "▶" else "⏸"}"
-        canvas.drawText(status, (width - hudPaint.measureText(status)) / 2f, height - hudPaint.textSize * 2f, hudPaint)
     }
 
     private fun drawHelp(canvas: Canvas) {
