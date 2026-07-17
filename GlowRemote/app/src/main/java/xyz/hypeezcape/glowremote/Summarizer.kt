@@ -134,7 +134,8 @@ object Summarizer {
     private fun prompt(bookTitle: String, chapterTitle: String, chapterText: String): String =
         "You are summarizing one chapter of the book \"$bookTitle\".\n" +
         "Write a detailed summary of this chapter: its core ideas, key arguments or events in the order they appear, and the main takeaways. " +
-        "Length: 150-300 words. Respond in the same language as the chapter text. " +
+        "Make it as long as the chapter's content genuinely requires — a rich chapter deserves a thorough summary, a thin one a short summary. Do not pad. " +
+        "Respond in the same language as the chapter text. " +
         "Output only the summary, no preamble.\n\n" +
         "Chapter: $chapterTitle\n\nText:\n$chapterText"
 
@@ -161,7 +162,7 @@ object Summarizer {
     private fun callClaude(key: String, prompt: String): String {
         val body = JSONObject()
             .put("model", "claude-haiku-4-5-20251001")
-            .put("max_tokens", 1500)
+            .put("max_tokens", 8000)
             .put("messages", JSONArray().put(JSONObject().put("role", "user").put("content", prompt)))
         val resp = httpJson(
             "https://api.anthropic.com/v1/messages", body.toString(),
