@@ -185,7 +185,12 @@ object RemoteServer {
                     }
                     path == "/upload" && method == "POST" -> {
                         val name = sanitize(query["name"] ?: "book_${System.currentTimeMillis()}.txt")
-                        val dir = ctx.getExternalFilesDir("Books")!!
+                        // Prefer the SHARED /sdcard/Books folder: it survives even a
+                        // full uninstall of the app. Fall back to the app-private
+                        // folder only if shared storage isn't writable.
+                        val shared = File(android.os.Environment.getExternalStorageDirectory(), "Books")
+                        val dir = if ((shared.isDirectory || shared.mkdirs()) && shared.canWrite()) shared
+                        else ctx.getExternalFilesDir("Books")!!
                         dir.mkdirs()
                         val out = File(dir, name)
                         out.outputStream().use { fos ->
