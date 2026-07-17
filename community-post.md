@@ -17,6 +17,9 @@ Anybody here in need of a reader that works well with our glasses? With the help
 
 **Getting books in:** download with the glasses' browser (they appear automatically), or push from the phone app.
 
+**▶️ 2-minute demo video:**
+https://youtube.com/shorts/FDaeNsjbpxM
+
 **⬇️ Download (both APKs) + source code:**
 https://github.com/karlua86/glow-reader
 

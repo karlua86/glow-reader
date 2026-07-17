@@ -17,6 +17,9 @@
 
 **怎么导入书籍：** 用眼镜自带的浏览器下载（会自动出现在书库里），或者用手机 App 推送。
 
+**▶️ 2 分钟演示视频：**
+https://youtube.com/shorts/FDaeNsjbpxM
+
 **⬇️ 下载（两个 APK）+ 源代码：**
 https://github.com/karlua86/glow-reader
 

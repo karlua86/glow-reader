@@ -2,6 +2,10 @@
 
 **A book reader for Rokid AI Glasses that shows only floating words — no glowing background block.**
 
+▶️ **[Watch the 2-minute demo on YouTube](https://youtube.com/shorts/FDaeNsjbpxM)**
+
+[![Watch the demo](https://img.youtube.com/vi/FDaeNsjbpxM/0.jpg)](https://youtube.com/shorts/FDaeNsjbpxM)
+
 I'm not from an IT background — I'm a property agent and I don't understand a single line of code. This entire app was built by **[Claude Code](https://claude.com/claude-code)** (Anthropic's AI coding assistant). I just described what I wanted in plain English, tested it on my glasses, and told it what to fix.
 
 ## See it for yourself
