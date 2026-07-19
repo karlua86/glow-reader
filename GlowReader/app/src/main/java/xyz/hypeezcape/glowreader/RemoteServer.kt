@@ -278,6 +278,7 @@ object RemoteServer {
             "up" -> AppState.main.post { AppState.keySink?.invoke(KeyEvent.KEYCODE_DPAD_UP) }
             "down" -> AppState.main.post { AppState.keySink?.invoke(KeyEvent.KEYCODE_DPAD_DOWN) }
             "playpause" -> AppState.main.post { AppState.keySink?.invoke(KeyEvent.KEYCODE_SPACE) }
+            "blank" -> AppState.main.post { AppState.reader?.toggleBlank() }
             "pagenext" -> AppState.main.post {
                 AppState.reader?.screenStep(true) ?: AppState.keySink?.invoke(KeyEvent.KEYCODE_DPAD_DOWN)
             }

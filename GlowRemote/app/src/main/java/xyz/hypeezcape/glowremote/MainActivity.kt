@@ -126,6 +126,7 @@ class MainActivity : Activity() {
             btn("Library") { cmd("back") },
             btn("Open last") { openLast() }
         ))
+        root.addView(btn("🙈  Close / reopen book (blank the glasses)") { cmd("blank") })
         root.addView(TextView(this).apply {
             text = "‹ › = one page/step in every mode · Mode cycles: page → word → scroll → sentence → paragraph"
             textSize = 12f; alpha = 0.6f; setPadding(0, dp(4), 0, 0)
@@ -215,6 +216,7 @@ class MainActivity : Activity() {
                     statusView.text = "✅ Connected to glasses ($ip)"
                     val st = j.getJSONObject("state")
                     val where = if (st.optString("screen") == "reader")
+                        (if (st.optBoolean("blanked")) "📕 Book closed (glasses blank) · " else "") +
                         "Reading: ${st.optString("book")} · ${st.optString("mode")} · ${st.optInt("percent")}%${if (st.optBoolean("playing")) " ▶" else ""}"
                     else "On library screen · ${j.getJSONArray("books").length()} book(s)"
                     nowView.text = "$where\nFont ${s.optInt("font")} · ${s.optInt("wpm")} wpm · area ${s.optInt("areatop")}%+${s.optInt("areaheight")}% · low-light ${if (s.optBoolean("lowlight")) "ON" else "off"} · full-lines ${if (s.optBoolean("strict")) "ON" else "off"}"

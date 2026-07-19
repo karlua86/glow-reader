@@ -142,6 +142,25 @@ class ReaderView(
     private var showHelp = false
     private val hideHud = Runnable { hudText = null; invalidate() }
 
+    /** "Book closed": draw absolutely nothing so the glass is fully see-through.
+     *  Toggled by double-tap (BACK), Z, or the phone app. Position is kept. */
+    private var blanked = false
+
+    fun toggleBlank() {
+        blanked = !blanked
+        if (blanked) {
+            stopMotion()
+            savePosition()
+            handler.removeCallbacks(hideHud)
+            hudText = null
+        } else {
+            hud("Book reopened")
+        }
+        invalidate()
+    }
+
+    fun isBlanked(): Boolean = blanked
+
     private val padding: Int get() = (14 * resources.displayMetrics.density).toInt()
     private val areaTop: Int get() = (height * areaTopPct / 100f).toInt() + padding
     private val areaHeight: Int get() = (height * areaHeightPct / 100f).toInt() - padding * 2
@@ -315,6 +334,7 @@ class ReaderView(
             else -> 0
         }
         state.put("percent", pct)
+        state.put("blanked", blanked)
         state.put("offset", currentCharOffset())
         state.put("length", text.length)
         state.put("path", path)
@@ -635,6 +655,7 @@ class ReaderView(
     // ---------------- mouse / touchpad ----------------
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (blanked) return true   // book closed: ignore all touches
         if (event.action == MotionEvent.ACTION_UP && !loading && error == null) {
             performClick()
             val x = event.x
@@ -676,8 +697,20 @@ class ReaderView(
             if (keyCode == KeyEvent.KEYCODE_BACK || keyCode == KeyEvent.KEYCODE_B) { onExit(); return true }
             return false
         }
+        // Book closed: swallow everything except the deliberate reopen/exit keys,
+        // so an accidental tap or swipe can't light the display mid-conversation.
+        if (blanked) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_Z -> toggleBlank()
+                KeyEvent.KEYCODE_B, KeyEvent.KEYCODE_ESCAPE -> { savePosition(); onExit() }
+            }
+            return true
+        }
         when (keyCode) {
-            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_B, KeyEvent.KEYCODE_ESCAPE -> {
+            // Double-tap on the temple arrives as BACK: "close the book" —
+            // stay in the app, show nothing. Double-tap again to reopen.
+            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_Z -> { toggleBlank(); return true }
+            KeyEvent.KEYCODE_B, KeyEvent.KEYCODE_ESCAPE -> {
                 savePosition(); onExit(); return true
             }
             KeyEvent.KEYCODE_M -> { switchMode(); return true }
@@ -835,6 +868,7 @@ class ReaderView(
 
     override fun onDraw(canvas: Canvas) {
         canvas.drawColor(Color.BLACK)
+        if (blanked) return   // book closed: pure black = invisible glass
         if (loading) { drawCentered(canvas, "Loading…", hudPaint); return }
         error?.let { drawCentered(canvas, "Error: $it  (B = back)", hudPaint); return }
         if (showHelp) { drawHelp(canvas); return }
@@ -979,6 +1013,7 @@ class ReaderView(
             "O P    display area shorter/taller",
             "V      save preferred settings",
             "R      restore preferred/defaults",
+            "2-tap/Z  close book (invisible) · again = reopen",
             "B      back to library · H close help"
         )
         var y = padding + hudPaint.textSize * 2
