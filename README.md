@@ -38,7 +38,7 @@ Reader apps sideloaded onto the glasses show up as a big glowing green block at 
 
 - Reads **EPUB, PDF, TXT and Markdown** (PDFs are reflowed into clean, resizable text)
 - **5 reading modes** (press `M` to cycle): page flip · word-by-word speed reading (RSVP) · teleprompter auto-scroll · sentence-by-sentence · paragraph-by-paragraph
-- **"Close the book" gesture** — double-tap the temple and the display goes completely invisible (you stay in the book, position kept) so you can look someone in the eye; double-tap again to keep reading
+- **"Close the book" gesture** — double-tap the temple and the display powers down to fully invisible (you stay in the book, position kept) so you can look someone in the eye; double-tap to keep reading. A faint veil fades out over ~5 seconds as the panel goes to sleep — after that it's true native transparency. If the display has fully slept, double-tap twice to reopen (first wakes the screen, second reopens the book).
 - **Low Light mode** (`L`) + 5 text brightness levels (`T`) for night reading
 - Adjustable display area — move/resize where the text floats (`U`/`N`/`O`/`P`)
 - **Full-lines-only** rendering — no half-cut words at the scroll edges (`X`)
@@ -59,7 +59,7 @@ Download both from **[Releases](../../releases)**.
 
 ## Controls
 
-**Glasses temple touchpad:** single tap = play/pause · swipe = turn page · **double-tap = close/reopen the book (invisible display)**.
+**Glasses temple touchpad:** single tap = play/pause · swipe = turn page · **double-tap = close/reopen the book (display powers off — truly invisible)**. While the book is closed, taps and swipes are ignored so you can't light the display by accident; if it has fully gone to sleep, double-tap twice to resume (wake, then reopen).
 
 **Without the phone app:** any Bluetooth keyboard/mouse works (e.g. a free "Bluetooth Keyboard & Mouse" phone app). Arrows or `W/A/S/D` navigate, `SPACE` turns pages / plays / pauses, `ENTER` opens a book, `B` returns to the library, `H` shows the full key list on screen.
 
