@@ -38,11 +38,15 @@ Reader apps sideloaded onto the glasses show up as a big glowing green block at 
 
 - Reads **EPUB, PDF, TXT and Markdown** (PDFs are reflowed into clean, resizable text)
 - **5 reading modes** (press `M` to cycle): page flip · word-by-word speed reading (RSVP) · teleprompter auto-scroll · sentence-by-sentence · paragraph-by-paragraph
+- **"Close the book" gesture** — double-tap the temple and the display goes completely invisible (you stay in the book, position kept) so you can look someone in the eye; double-tap again to keep reading
 - **Low Light mode** (`L`) + 5 text brightness levels (`T`) for night reading
 - Adjustable display area — move/resize where the text floats (`U`/`N`/`O`/`P`)
 - **Full-lines-only** rendering — no half-cut words at the scroll edges (`X`)
+- Words-per-minute and progress always visible in a status line that never overlaps the text
 - Remembers position, mode and settings per book; save/restore preferred settings (`V`/`R`)
 - Books auto-appear from the glasses' **Download folder** (use the built-in browser), or push them from your phone
+- **AI summary** (phone app): summarizes any book chapter by chapter with YOUR OWN API key (DeepSeek / OpenAI / Claude) in Short / Medium / Long versions — the summary lands in the glasses library as a readable book
+- Delete books, update safely: updating the app never loses books, positions or highlights
 
 ## The two apps
 
@@ -55,7 +59,9 @@ Download both from **[Releases](../../releases)**.
 
 ## Controls
 
-**Without the phone app:** any Bluetooth keyboard/mouse works (e.g. a free "Bluetooth Keyboard & Mouse" phone app). Arrows or `W/A/S/D` navigate, `SPACE` turns pages / plays / pauses, `ENTER` opens a book, `H` shows the full key list on screen.
+**Glasses temple touchpad:** single tap = play/pause · swipe = turn page · **double-tap = close/reopen the book (invisible display)**.
+
+**Without the phone app:** any Bluetooth keyboard/mouse works (e.g. a free "Bluetooth Keyboard & Mouse" phone app). Arrows or `W/A/S/D` navigate, `SPACE` turns pages / plays / pauses, `ENTER` opens a book, `B` returns to the library, `H` shows the full key list on screen.
 
 **With Glow Remote (phone app):** big buttons for everything — pages, font size, speed, brightness, display area — applied instantly on the glasses, plus one-tap "send a book to the glasses."
 Requirements: Rokid Manager installed, glasses' **WiFi turned on and connected to the same WiFi network as your phone**. Open Glow Remote → tap **Find glasses** → it connects by itself.
