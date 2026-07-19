@@ -49,16 +49,39 @@ class ReaderActivity : Activity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         path = intent.getStringExtra("path") ?: run { finish(); return }
-        view = ReaderView(this, path, onExit = { finish() }, onLowLight = { setLowLight(it) })
+        view = ReaderView(this, path,
+            onExit = { finish() },
+            onLowLight = { setLowLight(it) },
+            onBlank = { setBlankPower(it) })
         setContentView(view)
         setLowLight(Prefs.lowLight(this))
     }
 
     /** Low Light Leakage mode: drop panel brightness for this window. */
     fun setLowLight(on: Boolean) {
+        if (view.isBlanked()) return   // blank power state wins while closed
         val lp = window.attributes
         lp.screenBrightness =
             if (on) 0.03f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+        window.attributes = lp
+    }
+
+    /**
+     * "Book closed" power state. Showing black pixels still leaves a faint
+     * panel glow in total darkness — true invisibility needs the display
+     * driven to zero brightness, and (if closed for a while) allowed to
+     * sleep entirely like the glasses' native idle state.
+     */
+    fun setBlankPower(closed: Boolean) {
+        val lp = window.attributes
+        if (closed) {
+            lp.screenBrightness = 0.0f   // BRIGHTNESS_OVERRIDE_OFF: darkest possible
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            lp.screenBrightness =
+                if (Prefs.lowLight(this)) 0.03f else WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
         window.attributes = lp
     }
 
@@ -83,7 +106,8 @@ class ReaderView(
     context: Context,
     private val path: String,
     private val onExit: () -> Unit,
-    private val onLowLight: (Boolean) -> Unit
+    private val onLowLight: (Boolean) -> Unit,
+    private val onBlank: (Boolean) -> Unit = {}
 ) : View(context) {
 
     private val handler = Handler(Looper.getMainLooper())
@@ -156,6 +180,7 @@ class ReaderView(
         } else {
             hud("Book reopened")
         }
+        onBlank(blanked)
         invalidate()
     }
 
